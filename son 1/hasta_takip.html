@@ -1,0 +1,329 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+    <meta charset="UTF-8">
+    <title>Hasta Takip Sistemi</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            margin: 0;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            background-color: white;
+            padding: 30px;
+            border-radius: 12px;
+            box-shadow: 0 2px 15px rgba(0,0,0,0.1);
+        }
+        .form-container {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 20px;
+            margin-bottom: 30px;
+        }
+        .form-group {
+            margin-bottom: 15px;
+        }
+        label {
+            display: block;
+            margin-bottom: 8px;
+            color: #333;
+            font-weight: 500;
+        }
+        input, textarea {
+            width: 100%;
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 6px;
+            box-sizing: border-box;
+            transition: all 0.3s ease;
+        }
+        input:focus, textarea:focus {
+            outline: none;
+            border-color: #4CAF50;
+            box-shadow: 0 0 0 2px rgba(76, 175, 80, 0.2);
+        }
+        textarea {
+            height: 120px;
+            resize: vertical;
+        }
+        .buttons-container {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 20px;
+        }
+        button {
+            background-color: #4CAF50;
+            color: white;
+            padding: 12px 24px;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            font-weight: 500;
+            transition: all 0.3s ease;
+        }
+        button:hover {
+            background-color: #45a049;
+            transform: translateY(-1px);
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 20px;
+            background-color: white;
+            border-radius: 8px;
+            overflow: hidden;
+        }
+        th, td {
+            border: 1px solid #eee;
+            padding: 12px;
+            text-align: left;
+        }
+        th {
+            background-color: #4CAF50;
+            color: white;
+            font-weight: 500;
+        }
+        tr:nth-child(even) {
+            background-color: #f9f9f9;
+        }
+        tr:hover {
+            background-color: #f5f5f5;
+        }
+        .status-message {
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            padding: 10px 20px;
+            background-color: #4CAF50;
+            color: white;
+            border-radius: 6px;
+            opacity: 0;
+            transition: opacity 0.3s ease;
+        }
+        .status-message.show {
+            opacity: 1;
+        }
+        td button {
+            margin-right: 5px;
+            padding: 8px 16px;
+        }
+        td button:last-child {
+            margin-right: 0;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h2>Hasta Takip Sistemi</h2>
+        
+        <div class="form-container">
+            <div class="form-group">
+                <label for="tcNo">TC Kimlik No:</label>
+                <input type="text" id="tcNo" required>
+            </div>
+
+            <div class="form-group">
+                <label for="adSoyad">Ad Soyad:</label>
+                <input type="text" id="adSoyad" required>
+            </div>
+
+            <div class="form-group">
+                <label for="dogumTarihi">Doğum Tarihi:</label>
+                <input type="date" id="dogumTarihi">
+            </div>
+
+            <div class="form-group">
+                <label for="telefon">Telefon:</label>
+                <input type="tel" id="telefon">
+            </div>
+
+            <div class="form-group">
+                <label for="sikayet">Şikayet:</label>
+                <textarea id="sikayet"></textarea>
+            </div>
+
+            <div class="form-group">
+                <label for="tani">Tanı:</label>
+                <textarea id="tani"></textarea>
+            </div>
+        </div>
+
+        <div class="buttons-container">
+            <button onclick="hastaKaydet()">Hasta Kaydet</button>
+            <button onclick="hastaAra()">Hasta Ara</button>
+            <button onclick="formuTemizle()">Formu Temizle</button>
+        </div>
+
+        <table id="hastaTablosu">
+            <thead>
+                <tr>
+                    <th>TC No</th>
+                    <th>Ad Soyad</th>
+                    <th>Doğum Tarihi</th>
+                    <th>Telefon</th>
+                    <th>İşlemler</th>
+                </tr>
+            </thead>
+            <tbody id="hastaListesi">
+            </tbody>
+        </table>
+    </div>
+
+    <div id="statusMessage" class="status-message"></div>
+
+    <script>
+        // Hasta verilerini localStorage'da saklayacağız
+        let hastalar = JSON.parse(localStorage.getItem('hastalar')) || [];
+        let sonDegisiklik = null;
+        let kaydetmeZamanlayici = null;
+
+        // Form değişikliklerini izle
+        const formElementleri = ['tcNo', 'adSoyad', 'dogumTarihi', 'telefon', 'sikayet', 'tani'];
+        formElementleri.forEach(id => {
+            const element = document.getElementById(id);
+            element.addEventListener('input', () => {
+                sonDegisiklik = new Date();
+                if (!kaydetmeZamanlayici) {
+                    kaydetmeZamanlayici = setInterval(otomatikKaydet, 2000);
+                }
+            });
+        });
+
+        function otomatikKaydet() {
+            if (sonDegisiklik && new Date() - sonDegisiklik >= 2000) {
+                const tcNo = document.getElementById('tcNo').value;
+                const adSoyad = document.getElementById('adSoyad').value;
+                
+                if (tcNo && adSoyad) {
+                    hastaKaydet(true);
+                    showStatusMessage('Değişiklikler otomatik kaydedildi');
+                }
+            }
+        }
+
+        function showStatusMessage(message) {
+            const statusElement = document.getElementById('statusMessage');
+            statusElement.textContent = message;
+            statusElement.classList.add('show');
+            setTimeout(() => {
+                statusElement.classList.remove('show');
+            }, 2000);
+        }
+
+        function hastaKaydet(otomatik = false) {
+            const tcNo = document.getElementById('tcNo').value;
+            const adSoyad = document.getElementById('adSoyad').value;
+
+            if (!tcNo || !adSoyad) {
+                if (!otomatik) {
+                    alert('TC No ve Ad Soyad alanları zorunludur!');
+                }
+                return;
+            }
+
+            const yeniHasta = {
+                tcNo: tcNo,
+                adSoyad: adSoyad,
+                dogumTarihi: document.getElementById('dogumTarihi').value,
+                telefon: document.getElementById('telefon').value,
+                sikayet: document.getElementById('sikayet').value,
+                tani: document.getElementById('tani').value,
+                kayitTarihi: new Date().toLocaleString()
+            };
+
+            const index = hastalar.findIndex(h => h.tcNo === tcNo);
+            if (index > -1) {
+                hastalar[index] = yeniHasta;
+            } else {
+                hastalar.push(yeniHasta);
+            }
+
+            localStorage.setItem('hastalar', JSON.stringify(hastalar));
+            hastaListesiGuncelle();
+            
+            if (!otomatik) {
+                showStatusMessage('Hasta kaydedildi!');
+                formuTemizle();
+            }
+        }
+
+        function hastaAra() {
+            const tcNo = document.getElementById('tcNo').value;
+            if (!tcNo) {
+                alert('TC No giriniz!');
+                return;
+            }
+
+            const hasta = hastalar.find(h => h.tcNo === tcNo);
+            if (hasta) {
+                document.getElementById('adSoyad').value = hasta.adSoyad;
+                document.getElementById('dogumTarihi').value = hasta.dogumTarihi;
+                document.getElementById('telefon').value = hasta.telefon;
+                document.getElementById('sikayet').value = hasta.sikayet;
+                document.getElementById('tani').value = hasta.tani;
+            } else {
+                alert('Hasta bulunamadı!');
+            }
+        }
+
+        function hastaListesiGuncelle() {
+            const liste = document.getElementById('hastaListesi');
+            liste.innerHTML = '';
+            
+            hastalar.forEach(hasta => {
+                const row = document.createElement('tr');
+                row.innerHTML = `
+                    <td>${hasta.tcNo}</td>
+                    <td>${hasta.adSoyad}</td>
+                    <td>${hasta.dogumTarihi}</td>
+                    <td>${hasta.telefon}</td>
+                    <td>
+                        <button onclick="hastaSil('${hasta.tcNo}')" style="background-color: #dc3545;">Sil</button>
+                        <button onclick="hastaDetayGoster('${hasta.tcNo}')" style="background-color: #007bff;">Detay</button>
+                    </td>
+                `;
+                liste.appendChild(row);
+            });
+        }
+
+        function hastaDetayGoster(tcNo) {
+            const hasta = hastalar.find(h => h.tcNo === tcNo);
+            if (hasta) {
+                document.getElementById('tcNo').value = hasta.tcNo;
+                document.getElementById('adSoyad').value = hasta.adSoyad;
+                document.getElementById('dogumTarihi').value = hasta.dogumTarihi;
+                document.getElementById('telefon').value = hasta.telefon;
+                document.getElementById('sikayet').value = hasta.sikayet;
+                document.getElementById('tani').value = hasta.tani;
+            }
+        }
+
+        function hastaSil(tcNo) {
+            if (confirm('Hastayı silmek istediğinizden emin misiniz?')) {
+                hastalar = hastalar.filter(h => h.tcNo !== tcNo);
+                localStorage.setItem('hastalar', JSON.stringify(hastalar));
+                hastaListesiGuncelle();
+                showStatusMessage('Hasta silindi!');
+            }
+        }
+
+        function formuTemizle() {
+            document.getElementById('tcNo').value = '';
+            document.getElementById('adSoyad').value = '';
+            document.getElementById('dogumTarihi').value = '';
+            document.getElementById('telefon').value = '';
+            document.getElementById('sikayet').value = '';
+            document.getElementById('tani').value = '';
+        }
+
+        // Sayfa yüklendiğinde hasta listesini göster
+        window.onload = function() {
+            hastaListesiGuncelle();
+        };
+    </script>
+</body>
+</html> 
